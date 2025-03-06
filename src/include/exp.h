@@ -138,116 +138,37 @@ const int offset = 35;
 const float32_t offset_fp32 = 35.f;
 const float32_t esize_fp32 = 4.f;
 
-// static inline int exp(Tensor *dst, Tensor *src) {
-//   assert(dst->size == src->size);
 
-//   float16_t *psrc = (float16_t *)src->data;
-//   float16_t *pdst = (float16_t *)dst->data;
+vfloat16m1_t vfexp_f16m1(vfloat16m1_t vs1, int vl) {
+  // assert(vl <= (VLENB * 8 / 2));
 
-//   int vl;
-//   // int32_t tmp[VLENB*sizeof(int32_t)];
+  int32_t tmp[VLENB * 8 / 2 * sizeof(int32_t)];
 
-//   for (int i = 0; i < src->size; i += vl) {
-//     vl = vsetvl_e16m1(src->size - i);
-//     vfloat16m1_t _src = vle16_v_f16m1(psrc + i, vl);
-//     vfloat32m2_t _src_f32 = vfwcvt_f_f_v_f32m2(_src, vl);
+  vfloat32m2_t _src_f32 = __riscv_vfwcvt_f_f_v_f32m2(vs1, vl);
 
-//     vfloat32m2_t _n = vfmul_vf_f32m2(_src_f32, ln2_recip_h, vl); // _n = x/ln2_h
-//     vint32m2_t _n_int32 = vfcvt_x_f_v_i32m2(_n, vl); //_n_int32 = int(x/ln2_h)
-//     vfloat32m2_t _n_h = vfcvt_f_x_v_f32m2(_n_int32, vl); //_n_h: float16_t
-//     vfloat32m2_t _dx =
-//         vfnmsac_vf_f32m2(_src_f32, ln2_h, _n_h, vl); // _dx = x - _n_h*ln2
+  vfloat32m2_t _n = __riscv_vfmul_vf_f32m2(_src_f32, ln2_recip_h, vl); // _n = x/ln2_h
+  vint32m2_t _n_int32 = __riscv_vfcvt_x_f_v_i32m2(_n, vl);     //_n_int32 = int(x/ln2_h)
+  vfloat32m2_t _n_h = __riscv_vfcvt_f_x_v_f32m2(_n_int32, vl); //_n_h: float16_t
+  vfloat32m2_t _dx =
+      __riscv_vfnmsac_vf_f32m2(_src_f32, ln2_h, _n_h, vl); // _dx = x - _n_h*ln2
 
-//     // (_n_int32 + 25) as an index takes the `index` value
-//     _n_h = vfadd_vf_f32m2(_n_h, offset_fp32, vl);
-//     vuint32m2_t _n_uint32_25 = vfcvt_xu_f_v_u32m2(_n_h, vl);
-//     _n_uint32_25 = vmul_vx_u32m2(_n_uint32_25, 4, vl);
-//     vfloat32m2_t _der_6 = vloxei32_v_f32m2(der_6, _n_uint32_25, vl);
-//     vfloat32m2_t _der_2 = vloxei32_v_f32m2(der_2, _n_uint32_25, vl);
-//     vfloat32m2_t _der_1 = vloxei32_v_f32m2(der_1, _n_uint32_25, vl);
-//     vfloat32m2_t _res = vfmacc_vv_f32m2(_der_2, _der_6, _dx, vl);
-//     _res = vfmacc_vv_f32m2(_der_1, _res, _dx, vl);
-//     _res = vfmacc_vv_f32m2(_der_1, _res, _dx, vl);
 
-//     vse16_v_f16m1(pdst + i, vfncvt_f_f_w_f16m1(_res, vl), vl);
-//   }
-//   return 0;
-// }
+    //   use vrgather instead of indexed load
+  vuint32m2_t index = __riscv_vle32_v_u32m2((uint32_t *)tmp, vl);
+  vfloat32m2_t  der_6_vec = __riscv_vle32_v_f32m2(der_6, sizeof(der_6)/sizeof(float32_t));
+  vfloat32m2_t  der_2_vec = __riscv_vle32_v_f32m2(der_2, sizeof(der_2)/sizeof(float32_t));
+  vfloat32m2_t  der_1_vec = __riscv_vle32_v_f32m2(der_1, sizeof(der_1)/sizeof(float32_t));
 
-// vfloat16m1_t vfexp_f16m1(vfloat16m1_t vs1, int vl) {
-//   // assert(vl <= (VLENB * 8 / 2));
+  vfloat32m2_t _der_6 = __riscv_vrgather_vv_f32m2(der_6_vec, index, vl);
+  vfloat32m2_t _der_2 = __riscv_vrgather_vv_f32m2(der_2_vec, index, vl);
+  vfloat32m2_t _der_1 = __riscv_vrgather_vv_f32m2(der_1_vec, index, vl);
 
-//   int32_t tmp[VLENB * 8 / 2 * sizeof(int32_t)];
+  vfloat32m2_t _res = __riscv_vfmacc_vv_f32m2(_der_2, _der_6, _dx, vl);
+  _res = __riscv_vfmacc_vv_f32m2(_der_1, _res, _dx, vl);
+  _res = __riscv_vfmacc_vv_f32m2(_der_1, _res, _dx, vl);
 
-//   vfloat32m2_t _src_f32 = vfwcvt_f_f_v_f32m2(vs1, vl);
-
-//   vfloat32m2_t _n = vfmul_vf_f32m2(_src_f32, ln2_recip_h, vl); // _n = x/ln2_h
-//   vint32m2_t _n_int32 = vfcvt_x_f_v_i32m2(_n, vl);     //_n_int32 = int(x/ln2_h)
-//   vfloat32m2_t _n_h = vfcvt_f_x_v_f32m2(_n_int32, vl); //_n_h: float16_t
-//   vfloat32m2_t _dx =
-//       vfnmsac_vf_f32m2(_src_f32, ln2_h, _n_h, vl); // _dx = x - _n_h*ln2
-
-//   // _n_int32 + 25 作为索引取index值
-//   vse32_v_i32m2(tmp, vadd_vx_i32m2(_n_int32, offset, vl), vl);
-//   vuint32m2_t _n_uint32_25 = vle32_v_u32m2((uint32_t *)tmp, vl);
-//   _n_uint32_25 = vmul_vx_u32m2(_n_uint32_25, 4, vl);
-//   vfloat32m2_t _der_6 = vloxei32_v_f32m2(der_6, _n_uint32_25, vl);
-//   vfloat32m2_t _der_2 = vloxei32_v_f32m2(der_2, _n_uint32_25, vl);
-//   vfloat32m2_t _der_1 = vloxei32_v_f32m2(der_1, _n_uint32_25, vl);
-//   vfloat32m2_t _res = vfmacc_vv_f32m2(_der_2, _der_6, _dx, vl);
-//   _res = vfmacc_vv_f32m2(_der_1, _res, _dx, vl);
-//   _res = vfmacc_vv_f32m2(_der_1, _res, _dx, vl);
-
-//   return vfncvt_f_f_w_f16m1(_res, vl);
-// }
-
-vfloat32m1_t vfexp_f32m1(vfloat32m1_t vs1, int vl) {
-  // assert(vl <= (VLENB * 8 / 4));
-
-  vfloat32m1_t _n = __riscv_vfmul_vf_f32m1(vs1, ln2_recip_h, vl); // _n = x/ln2_h
-  vint32m1_t _n_int32 = __riscv_vfcvt_x_f_v_i32m1(_n, vl);     //_n_int32 = int(x/ln2_h)
-  vfloat32m1_t _n_h = __riscv_vfcvt_f_x_v_f32m1(_n_int32, vl); //_n_h: float16_t
-  vfloat32m1_t _dx =
-      __riscv_vfnmsac_vf_f32m1(vs1, ln2_h, _n_h, vl); // _dx = x - _n_h*ln2
-
-  _n_h = __riscv_vfadd_vf_f32m1(_n_h, offset_fp32, vl);
-  vuint32m1_t _n_uint32_25 = __riscv_vfcvt_xu_f_v_u32m1(_n_h, vl);
-  _n_uint32_25 = __riscv_vmul_vx_u32m1(_n_uint32_25, 4, vl);
-
-  vfloat32m1_t _der_6 = __riscv_vloxei32_v_f32m1(der_6, _n_uint32_25, vl);
-  vfloat32m1_t _der_2 = __riscv_vloxei32_v_f32m1(der_2, _n_uint32_25, vl);
-  vfloat32m1_t _der_1 = __riscv_vloxei32_v_f32m1(der_1, _n_uint32_25, vl);
-
-  vfloat32m1_t _res = __riscv_vfmacc_vv_f32m1(_der_2, _der_6, _dx, vl);
-  _res = __riscv_vfmacc_vv_f32m1(_der_1, _res, _dx, vl);
-  _res = __riscv_vfmacc_vv_f32m1(_der_1, _res, _dx, vl);
-
-  return _res;
+  return __riscv_vfncvt_f_f_w_f16m1(_res, vl);
 }
 
-
-vfloat32m8_t vfexp_f32m8(vfloat32m8_t vs1, int vl) {
-  // assert(vl <= (VLENB * 8 / 4));
-
-  vfloat32m8_t _n           =  __riscv_vfmul_vf_f32m8(vs1, ln2_recip_h, vl); // _n = x/ln2_h
-  vint32m8_t _n_int32       =  __riscv_vfcvt_x_f_v_i32m8(_n, vl);     //_n_int32 = int(x/ln2_h)
-  vfloat32m8_t _n_h         =  __riscv_vfcvt_f_x_v_f32m8(_n_int32, vl); //_n_h: float16_t
-  vfloat32m8_t _dx =
-       __riscv_vfnmsac_vf_f32m8(vs1, ln2_h, _n_h, vl); // _dx = x - _n_h*ln2
-
-  _n_h =  __riscv_vfadd_vf_f32m8(_n_h, offset_fp32, vl);
-  vuint32m8_t _n_uint32_25 =  __riscv_vfcvt_xu_f_v_u32m8(_n_h, vl);
-  _n_uint32_25 =  __riscv_vmul_vx_u32m8(_n_uint32_25, 4, vl);
-
-  vfloat32m8_t _der_6 =  __riscv_vloxei32_v_f32m8(der_6, _n_uint32_25, vl);
-  vfloat32m8_t _der_2 =  __riscv_vloxei32_v_f32m8(der_2, _n_uint32_25, vl);
-  vfloat32m8_t _der_1 =  __riscv_vloxei32_v_f32m8(der_1, _n_uint32_25, vl);
-
-  vfloat32m8_t _res =  __riscv_vfmacc_vv_f32m8(_der_2, _der_6, _dx, vl);
-  _res =  __riscv_vfmacc_vv_f32m8(_der_1, _res, _dx, vl);
-  _res =  __riscv_vfmacc_vv_f32m8(_der_1, _res, _dx, vl);
-
-  return _res;
-}
 
 #endif // __EXP_H__

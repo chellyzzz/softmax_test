@@ -7,8 +7,10 @@
 #include <stdio.h>
 
 #define VLEN 2048
+#define VLENB (VLEN / 8)
 typedef float float32_t;
 typedef double float64_t;
+typedef _Float16 float16_t;
 
 typedef struct {
     int shape[4];

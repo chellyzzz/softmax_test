@@ -9,21 +9,24 @@ SRC += src/$(TOP).c
 SRC += $(INCLUDE_DIR)/start.S
 
 
-CFLAGS  += -O2 -march=rv64gcv -mabi=lp64d -I$(INCLUDE_DIR)
+CFLAGS  += -O2 -march=rv64gcv_zvfh -mabi=lp64d -I$(INCLUDE_DIR)
 CFLAGS  += -nostdlib  -fPIC
 LDFLAGS += -T $(INCLUDE_DIR)/linker.ld
 
-default: run disa
+default: gen_data run disa
 
 # 生成规则
 run: $(SRC)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(SRC) -o $(TARGET)
 
 disa: $(TARGET)
-	riscv64-unknown-elf-objdump -D $(TARGET) > $(TARGET).txt
+	riscv64-unknown-elf-objdump -d $(TARGET) > $(TARGET).txt
 
 clean:
 	rm -f $(BUILD_DIR)/*
+
+gen_data:
+	python3 gen_data.py	
 
 
 .PHONY: clean run disa default	

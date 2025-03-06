@@ -16,11 +16,11 @@ int main(int argc, char **argv)
     int w = W;
 
     // 使用从 input_data.h 导入的随机数据
-    tensor_new_2d(srcMat, H, W, sizeof(float32_t), input_data);  // 使用 input_data 替代原来的 srcData
-    tensor_new_2d(dstMat, H, W, sizeof(float32_t), dstData);    // 目标数据
+    tensor_new_2d(srcMat, H, W, sizeof(float16_t), input_data);  // 使用 input_data 替代原来的 srcData
+    tensor_new_2d(dstMat, H, W, sizeof(float16_t), dstData);    // 目标数据
 
     for (int i = 0; i < NLOOPS; i++) {
-        softmax(&dstMat, &srcMat);
+        softmax_e16(&dstMat, &srcMat);
     }
 
     return 0;
