@@ -17,6 +17,7 @@ default: gen_data run disa
 
 # 生成规则
 run: $(SRC)
+	make gen_data
 	$(CC) $(CFLAGS) $(LDFLAGS) $(SRC) -o $(TARGET)
 
 disa: $(TARGET)
@@ -26,7 +27,7 @@ clean:
 	rm -f $(BUILD_DIR)/*
 
 gen_data:
-	python3 gen_data.py	
+	python3 gen_data.py	--dtype fp32
 
 
 .PHONY: clean run disa default	

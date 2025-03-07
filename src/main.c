@@ -3,25 +3,20 @@
 #include <riscv_vector.h>
 #include "softmax.h"
 #include "input_data.h"
+#include "softmax_rvv.h"
 
 #define H 64
 #define W 64
 #define NLOOPS 10
 
-float dstData[H * W];
 
 int main(int argc, char **argv)
 {
-    int h = H;
-    int w = W;
+    float src[] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+    size_t n = sizeof(src) / sizeof(src[0]);
+    float dst[n];
 
-    // 使用从 input_data.h 导入的随机数据
-    tensor_new_2d(srcMat, H, W, sizeof(float16_t), input_data);  // 使用 input_data 替代原来的 srcData
-    tensor_new_2d(dstMat, H, W, sizeof(float16_t), dstData);    // 目标数据
-
-    for (int i = 0; i < NLOOPS; i++) {
-        softmax_e16(&dstMat, &srcMat);
-    }
-
+    softmax_rvv_fp32(dst, src, n);
+    
     return 0;
 }
