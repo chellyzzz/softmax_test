@@ -16,7 +16,7 @@ int main(int argc, char **argv)
     size_t n = sizeof(src) / sizeof(src[0]);
     float dst[n];
 
-    softmax_rvv_fp32(dst, src, n);
+    softmax_stable_rvv_fp32(dst, src, n);
     
     return 0;
 }

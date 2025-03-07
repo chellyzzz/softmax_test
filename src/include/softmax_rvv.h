@@ -1,10 +1,9 @@
 #ifndef _SOFTMAX_RVV_H_
 #define _SOFTMAX_RVV_H_
 
-#include "tensor.h"
 #include <riscv_vector.h>
 #include <stddef.h>
-#include <fenv.h>
+#include <math.h>
 
 
 void set_rounding_mode_rne() {
@@ -111,5 +110,52 @@ void softmax_rvv_fp32(float* dst, float* src, size_t n)
     }
 }
 
+void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
+{
+    // initializing temporary maximum vector
+    // vlmax initialization is required in case the first vsetvl does
+    // not return VLMAX while avl > vl: in this case we need to
+    // avoid some uninitialized values in vmax
+    const size_t vlmax = __riscv_vsetvlmax_e32m1(); 
+    vfloat32m1_t vmax = __riscv_vfmv_v_f_f32m1(-INFINITY, vlmax);
+
+    size_t avl = n;
+
+    while (avl > 0) {
+        size_t vl = __riscv_vsetvl_e32m1(avl);
+        vfloat32m1_t vx = __riscv_vle32_v_f32m1(src, vl);
+        vmax = __riscv_vfmax_tu(vmax, vx, vmax, vl);
+        avl -= vl;
+        src += vl;
+    }
+    src -= n; // reseting source pointer
+
+    // final maximum reduction
+    vfloat32m1_t vredmax = __riscv_vfmv_v_f_f32m1(-INFINITY, vlmax);
+    vredmax = __riscv_vfredmax(vmax, vredmax, vlmax);
+    float max_x = __riscv_vfmv_f_s_f32m1_f32(vredmax);
+
+#ifdef VERY_VERBOSE
+    printf("max_x=%a\n", max_x );
+#endif
+
+    // Computing element-wise exponentials and their sum.
+    // max_x is subtracted from each element before computing the element-wise exponential.
+    float sum = quick_dirty_vector_expf(dst, src, max_x, n);
+
+    // computing the reciprocal of the sum of exponentials, once and for all
+    float inv_sum = 1.f / sum;
+
+    // normalizing each element
+    avl = n;
+    while (avl > 0) {
+        size_t vl = __riscv_vsetvl_e32m1(avl);
+        vfloat32m1_t row = __riscv_vle32_v_f32m1(dst, vl);
+        row = __riscv_vfmul_vf_f32m1(row, inv_sum, vl);
+        __riscv_vse32(dst, row, vl);
+        avl -= vl;
+        dst += vl;
+    }
+}
 
 #endif
